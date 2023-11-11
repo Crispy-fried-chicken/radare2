@@ -30,7 +30,7 @@ static inline CType *pointed_type(CType *type);
 static bool is_compatible_types(CType *type1, CType *type2);
 static void expr_type(TCCState *s1, CType *type);
 static int parse_btype(TCCState *s1, CType *type, AttributeDef *ad);
-static void type_decl(TCCState *s1, CType *type, AttributeDef *ad, int *v, int td);
+static void type_decl(TCCState *s1, CType *type, AttributeDef *ad, size_t *v, int td);
 static void decl_initializer(TCCState *s1, CType *type, unsigned long c, int first, int size_only);
 static void decl_initializer_alloc(TCCState *s1, CType *type, AttributeDef *ad, int r, int has_init, int v, char *asm_label, int scope);
 static int decl0(TCCState *s1, int l, int is_for_loop_init);
@@ -896,7 +896,8 @@ static void parse_attribute(TCCState *s1, AttributeDef *ad) {
 
 /* enum/struct/union declaration. u is either VT_ENUM, VT_STRUCT or VT_UNION */
 static void struct_decl(TCCState *s1, CType *type, int u, bool is_typedef) {
-	int v, size, align, maxalign, offset;
+	size_t v;
+	int size, align, maxalign, offset;
 	int bit_size, bit_pos, bsize, bt, lbit_pos, prevbt;
 	char buf[STRING_MAX_SIZE + 1];
 	Sym *s, *ss, *ass, **ps;
@@ -925,7 +926,7 @@ static void struct_decl(TCCState *s1, CType *type, int u, bool is_typedef) {
 		}
 	} else {
 		v = s1->anon_sym++;
-		snprintf (buf, sizeof (buf), "%u", v - SYM_FIRST_ANOM);
+		snprintf (buf, sizeof (buf), "%u", (unsigned int)(v - SYM_FIRST_ANOM));
 		name = buf;
 		autonamed = true;
 	}
@@ -1194,7 +1195,7 @@ do_decl:
 /* parse an expression of the form '(type)' or '(expr)' and return its
  * type */
 static void parse_expr_type(TCCState *s1, CType *type) {
-	int n;
+	size_t n;
 	AttributeDef ad;
 
 	skip (s1, '(');
@@ -1471,7 +1472,8 @@ static inline void convert_parameter_type(TCCState *s1, CType *pt) {
 }
 
 static void post_type(TCCState *s1, CType *type, AttributeDef *ad) {
-	int n, l, t1, arg_size, align;
+	size_t n;
+	int l, t1, arg_size, align;
 	Sym **plast, *s, *first;
 	AttributeDef ad1;
 	CType pt = {0};
@@ -1625,7 +1627,7 @@ old_proto:
  * attribute definition of the basic type. It can be modified by
  * type_decl().
  */
-static void type_decl(TCCState *s1, CType *type, AttributeDef *ad, int *v, int td) {
+static void type_decl(TCCState *s1, CType *type, AttributeDef *ad, size_t *v, int td) {
 	Sym *s;
 	int qualifiers, storage;
 	CType *type1 = R_NEW0 (CType);
@@ -1763,7 +1765,7 @@ ST_FUNC void indir(TCCState *s1) {
 
 static void parse_type(TCCState *s1, CType *type) {
 	AttributeDef ad;
-	int n;
+	size_t n;
 
 	if (!parse_btype (s1, type, &ad)) {
 		expect (s1, "type");
@@ -1779,7 +1781,8 @@ static void vpush_tokc(TCCState *s1, int t) {
 }
 
 static void unary(TCCState *s1) {
-	int n, t, align, size, r, sizeof_caller;
+	size_t n, r;
+	int t, align, size, sizeof_caller;
 	CType type = {0};
 	Sym *s;
 	AttributeDef ad;
@@ -2485,7 +2488,8 @@ static void init_putz(TCCState *s1, CType *t, unsigned long c, int size) {
  * size only evaluation is wanted (only for arrays). */
 static void decl_initializer(TCCState *s1, CType *type, unsigned long c, int first, int size_only) {
 	long long index;
-	int n, no_oblock, nb, parlevel, parlevel1;
+	size_t n;
+	int no_oblock, nb, parlevel, parlevel1;
 	size_t array_length, size1, i;
 	int align1, expr_type;
 	Sym *s, *f;
@@ -2886,7 +2890,7 @@ no_alloc:
 /* XXX: check multiple parameter */
 static void func_decl_list(TCCState *s1, Sym *func_sym) {
 	AttributeDef ad;
-	int v;
+	size_t v;
 	Sym *s = NULL;
 	CType btype, type;
 
@@ -2941,7 +2945,7 @@ static void func_decl_list(TCCState *s1, Sym *func_sym) {
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 // TODO: must return bool
 static int decl0(TCCState *s1, int l, int is_for_loop_init) {
-	int v, has_init, r;
+	size_t v, r;
 	CType type = {.t = 0, .ref = NULL}, btype = {.t = 0, .ref = NULL};
 	Sym *sym = NULL;
 	AttributeDef ad;
@@ -2961,7 +2965,7 @@ static int decl0(TCCState *s1, int l, int is_for_loop_init) {
 			    (s1->tok == TOK_ASM1 || s1->tok == TOK_ASM2 || s1->tok == TOK_ASM3)) {
 				/* global asm block */
 #if 1
-				eprintf ("global asm not supported\n");
+				R_LOG_ERROR ("global asm not supported");
 				return 1;
 #endif
 				// asm_global_instr ();
@@ -3113,8 +3117,7 @@ func_error1:
 						/* not lvalue if array */
 						r |= lvalue_type (type.t);
 					}
-					has_init = (s1->tok == '=');
-					if (has_init && (type.t & VT_VLA)) {
+					if ((s1->tok == '=') && (type.t & VT_VLA)) {
 						tcc_error (s1, "Variable length array cannot be initialized");
 						return 1;
 					}
