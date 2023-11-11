@@ -30,7 +30,7 @@ static inline CType *pointed_type(CType *type);
 static bool is_compatible_types(CType *type1, CType *type2);
 static void expr_type(TCCState *s1, CType *type);
 static int parse_btype(TCCState *s1, CType *type, AttributeDef *ad);
-static void type_decl(TCCState *s1, CType *type, AttributeDef *ad, size_t *v, int td);
+static void type_decl(TCCState *s1, CType *type, AttributeDef *ad, AttributeDef *v, int td);
 static void decl_initializer(TCCState *s1, CType *type, unsigned long c, int first, int size_only);
 static void decl_initializer_alloc(TCCState *s1, CType *type, AttributeDef *ad, int r, int has_init, int v, char *asm_label, int scope);
 static int decl0(TCCState *s1, int l, int is_for_loop_init);
@@ -130,7 +130,7 @@ ST_INLN void sym_free(TCCState *s1, Sym *sym) {
 }
 
 /* push, without hashing */
-ST_FUNC Sym *sym_push2(TCCState *s1, Sym **ps, int v, int t, long long c) {
+ST_FUNC Sym *sym_push2(TCCState *s1, Sym **ps, AttributeDef v, int t, long long c) {
 #if 0
 	if (ps == &local_stack) {
 		for (s = *ps; s && s != scope_stack_bottom; s = s->prev) {
@@ -170,30 +170,27 @@ static Sym *struct_find(TCCState *s1, int v) {
 }
 
 /* find an identifier */
-ST_INLN Sym *sym_find(TCCState *s1, int v) {
-	v -= TOK_IDENT;
-	if ((unsigned) v >= (unsigned) (s1->tok_ident - TOK_IDENT)) {
+ST_INLN Sym *sym_find(TCCState *s1, AttributeDef v) {
+	size_t nv = (size_t)(*(size_t*)&v);
+	nv -= TOK_IDENT;
+	if (nv >= (size_t) (s1->tok_ident - TOK_IDENT)) {
 		return NULL;
 	}
-	return s1->table_ident[v]->sym_identifier;
+	return s1->table_ident[nv]->sym_identifier;
 }
 
 // TODO: Add better way to store the meta information
 // about the pushed type
 int tcc_sym_push(TCCState *s1, char *typename, int typesize, int meta) {
-	CType *new_type = (CType *) malloc (sizeof (CType));
-	if (!new_type) {
-		return 0;
-	}
-	new_type->ref = sym_malloc (s1);
-	new_type->t = meta;
-
-	Sym *sym = sym_push (s1, 0, new_type, 0, 0);
-
-	free (new_type);
-	return sym != NULL;
+	CType new_type = {
+		.ref = sym_malloc (s1),
+		.t = meta
+	};
+	AttributeDef v = {0};
+	return sym_push (s1, v, &new_type, 0, 0) != NULL;
 }
 
+#if 0
 void dump_type(TCCState *s1, CType *type, int depth) {
 	if (depth <= 0) {
 		return;
@@ -237,9 +234,10 @@ void dump_type(TCCState *s1, CType *type, int depth) {
 		// dump_type(&(type->ref->type), --depth);
 	}
 }
+#endif
 
 /* push a given symbol on the symbol stack */
-ST_FUNC Sym *sym_push(TCCState *s1, int v, CType *type, int r, long long c) {
+ST_FUNC Sym *sym_push(TCCState *s1, AttributeDef v, CType *type, int r, long long c) {
 	Sym *s, **ps;
 	TokenSym *ts;
 
@@ -305,7 +303,7 @@ ST_FUNC Sym *global_identifier_push(TCCState *s1, int v, int t, long long c) {
 ST_FUNC void sym_pop(TCCState *s1, Sym **ptop, Sym *b) {
 	Sym *ss, **ps;
 	TokenSym *ts;
-	int v;
+	AttributeDef v;
 	if (!b) {
 		return;
 	}
@@ -896,7 +894,7 @@ static void parse_attribute(TCCState *s1, AttributeDef *ad) {
 
 /* enum/struct/union declaration. u is either VT_ENUM, VT_STRUCT or VT_UNION */
 static void struct_decl(TCCState *s1, CType *type, int u, bool is_typedef) {
-	size_t v;
+	AttributeDef v;
 	int size, align, maxalign, offset;
 	int bit_size, bit_pos, bsize, bt, lbit_pos, prevbt;
 	char buf[STRING_MAX_SIZE + 1];
@@ -1195,7 +1193,7 @@ do_decl:
 /* parse an expression of the form '(type)' or '(expr)' and return its
  * type */
 static void parse_expr_type(TCCState *s1, CType *type) {
-	size_t n;
+	AttributeDef n;
 	AttributeDef ad;
 
 	skip (s1, '(');
@@ -1472,7 +1470,7 @@ static inline void convert_parameter_type(TCCState *s1, CType *pt) {
 }
 
 static void post_type(TCCState *s1, CType *type, AttributeDef *ad) {
-	size_t n;
+	AttributeDef n;
 	int l, t1, arg_size, align;
 	Sym **plast, *s, *first;
 	AttributeDef ad1;
@@ -1627,7 +1625,7 @@ old_proto:
  * attribute definition of the basic type. It can be modified by
  * type_decl().
  */
-static void type_decl(TCCState *s1, CType *type, AttributeDef *ad, size_t *v, int td) {
+static void type_decl(TCCState *s1, CType *type, AttributeDef *ad, AttributeDef *v, int td) {
 	Sym *s;
 	int qualifiers, storage;
 	CType *type1 = R_NEW0 (CType);
@@ -1765,8 +1763,7 @@ ST_FUNC void indir(TCCState *s1) {
 
 static void parse_type(TCCState *s1, CType *type) {
 	AttributeDef ad;
-	size_t n;
-
+	AttributeDef n;
 	if (!parse_btype (s1, type, &ad)) {
 		expect (s1, "type");
 	}
@@ -1781,7 +1778,7 @@ static void vpush_tokc(TCCState *s1, int t) {
 }
 
 static void unary(TCCState *s1) {
-	size_t n, r;
+	AttributeDef n, r;
 	int t, align, size, sizeof_caller;
 	CType type = {0};
 	Sym *s;
@@ -2488,7 +2485,7 @@ static void init_putz(TCCState *s1, CType *t, unsigned long c, int size) {
  * size only evaluation is wanted (only for arrays). */
 static void decl_initializer(TCCState *s1, CType *type, unsigned long c, int first, int size_only) {
 	long long index;
-	size_t n;
+	AttributeDef n;
 	int no_oblock, nb, parlevel, parlevel1;
 	size_t array_length, size1, i;
 	int align1, expr_type;
@@ -2890,7 +2887,7 @@ no_alloc:
 /* XXX: check multiple parameter */
 static void func_decl_list(TCCState *s1, Sym *func_sym) {
 	AttributeDef ad;
-	size_t v;
+	AttributeDef v;
 	Sym *s = NULL;
 	CType btype, type;
 
@@ -2945,7 +2942,7 @@ static void func_decl_list(TCCState *s1, Sym *func_sym) {
 /* 'l' is VT_LOCAL or VT_CONST to define default storage type */
 // TODO: must return bool
 static int decl0(TCCState *s1, int l, int is_for_loop_init) {
-	size_t v, r;
+	AttributeDef v, r;
 	CType type = {.t = 0, .ref = NULL}, btype = {.t = 0, .ref = NULL};
 	Sym *sym = NULL;
 	AttributeDef ad;
