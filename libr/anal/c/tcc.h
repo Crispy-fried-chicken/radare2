@@ -104,8 +104,9 @@ typedef UINT_PTR uintptr_t;
 #define TOK_MAX_SIZE        4 /* token max size in int unit when stored in string */
 
 /* GNUC attribute definition */
-typedef struct AttributeDef {
-	ut32
+typedef ut32 AttributeDefValue;
+typedef union AttributeDef {
+	AttributeDefValue
 		func_call     : 3, /* calling convention (0..5), see below */
 		aligned       : 5, /* alignement (0..16) */
 		packed        : 1,
@@ -115,7 +116,8 @@ typedef struct AttributeDef {
 		mode          : 4,
 		weak          : 1,
 		fill          : 11;
-	ut32 alias_target;    /* token */
+	AttributeDefValue value;
+	// ut32 alias_target;    /* token */
 } AttributeDef;
 
 
@@ -770,7 +772,7 @@ ST_FUNC Sym *sym_push2(TCCState *s1, Sym **ps, AttributeDef v, int t, long long 
 ST_FUNC Sym *sym_push(TCCState *s1, AttributeDef v, CType *type, int r, long long c);
 ST_FUNC void sym_pop(TCCState *s1, Sym **ptop, Sym *b);
 ST_INLN Sym *sym_find(TCCState *s1, AttributeDef v);
-ST_FUNC Sym *global_identifier_push(TCCState *s1, int v, int t, long long c);
+ST_FUNC Sym *global_identifier_push(TCCState *s1, AttributeDef v, int t, long long c);
 
 ST_FUNC bool tcc_open_bf(TCCState *s1, const char *filename, int initlen);
 ST_FUNC int tcc_open(TCCState *s1, const char *filename);
